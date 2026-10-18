@@ -3,11 +3,22 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "main": "electron/main.js",
+  "bin": {
+    "gitc": "./cli.cjs"
+  },
   "scripts": {
     "dev": "concurrently -k -n api,web -c green,blue \"node server.js\" \"vite --host 0.0.0.0\"",
+    "icons": "node scripts/generate-icon.mjs",
+    "prebuild": "npm run icons",
     "build": "tsc -b && vite build",
     "start": "node server.js",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "desktop:dev": "npm run icons && concurrently -k -n api,web,desktop -c green,blue,magenta \"node server.js\" \"vite --host 127.0.0.1 --strictPort\" \"wait-on http://127.0.0.1:5173 && electron .\"",
+    "desktop:dir": "npm run build && electron-builder --dir",
+    "desktop:package": "npm run build && electron-builder",
+    "cli": "node cli.cjs",
+    "cli:exe": "pkg cli.cjs --target node24-win-x64 --output release/gitc.exe"
   },
   "dependencies": {
     "express": "^5.1.0",
@@ -22,7 +33,28 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.0.12",
+    "@yao-pkg/pkg": "^6.23.0",
     "typescript": "~5.7.2",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.huntertigner.gitchart",
+    "productName": "GitChart",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "server.js",
+      "package.json"
+    ],
+    "win": {
+      "icon": "electron/icon.ico",
+      "target": "nsis"
+    }
   }
 }

@@ -3,7 +3,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const app = express();
-const port = Number(process.env.PORT) || 3001;
 const root = path.dirname(fileURLToPath(import.meta.url));
 
 app.get('/api/repository', async (request, response) => {
@@ -63,6 +62,13 @@ app.get('*path', (request, response, next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`GitCharts server listening on http://localhost:${port}`);
-});
+export function startGitChartsServer(port = Number(process.env.PORT) || 3001, host = '127.0.0.1') {
+  return app.listen(port, host);
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const port = Number(process.env.PORT) || 3001;
+  startGitChartsServer(port, '127.0.0.1').on('listening', () => {
+    console.log(`GitCharts server listening on http://localhost:${port}`);
+  });
+}

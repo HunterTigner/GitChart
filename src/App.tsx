@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react';
-import { ArrowDownToLine, ArrowUpRight, ChartNoAxesColumnIncreasing, Github, Search, Star } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { ArrowDownToLine, ArrowUpRight, ChartNoAxesColumnIncreasing, Copy, Github, Menu as MenuIcon, Minus, Search, Square, Star, X } from 'lucide-react';
 
 type Language = { language: string; bytes: number };
 type Repository = {
@@ -9,6 +9,8 @@ type Repository = {
   url: string;
   languages: Language[];
 };
+
+type CliChartViewProps = { repositoryName: string; command: string };
 
 const languageColors: Record<string, string> = {
   TypeScript: '#3977c5', JavaScript: '#e1ba3e', Python: '#4387a8', HTML: '#e1794d',
@@ -29,12 +31,88 @@ function formatBytes(bytes: number) {
   return `${amount.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${units[unit]}`;
 }
 
+function CliChartView({ repositoryName, command }: CliChartViewProps) {
+  const [repository, setRepository] = useState<Repository | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch(`/api/repository?repo=${encodeURIComponent(repositoryName)}`)
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? 'could not load this repository.');
+        return data as Repository;
+      })
+      .then((data) => {
+        if (!cancelled) setRepository(data);
+      })
+      .catch((requestError: unknown) => {
+        if (!cancelled) setError(requestError instanceof Error ? requestError.message : 'could not load this repository.');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [repositoryName]);
+
+  const totalBytes = repository?.languages.reduce((total, item) => total + item.bytes, 0) ?? 0;
+
+  return (
+    <main className="cli-chart-window">
+      <div className="cli-command-block">
+        <span className="cli-command-label">command</span>
+        <span className="cli-command-text">{command}</span>
+      </div>
+
+      {error ? (
+        <p className="cli-chart-message error-message">{error}</p>
+      ) : repository ? (
+        <>
+          <div className="cli-chart-heading">
+            <h1>{repository.name.toLowerCase()}</h1>
+            <span>{repository.stars.toLocaleString()} stars · {repository.languages.length} languages · {formatBytes(totalBytes)} total</span>
+          </div>
+          <div className="cli-chart-list">
+            {repository.languages.map((item) => {
+              const percent = totalBytes ? (item.bytes / totalBytes) * 100 : 0;
+              const color = languageColors[item.language] ?? '#3fb950';
+
+              return (
+                <div className="cli-chart-row" key={item.language}>
+                  <div className="cli-chart-label">
+                    <span className="language-dot" style={{ '--language-color': color } as React.CSSProperties} />
+                    <span className="cli-language-name">{item.language.toLowerCase()}</span>
+                    <span className="cli-language-size">{formatBytes(item.bytes)}</span>
+                    <strong>{percent.toFixed(percent >= 10 ? 0 : 1)}%</strong>
+                  </div>
+                  <div className="cli-bar-track">
+                    <div className="cli-bar-fill" style={{ width: `${percent}%`, '--language-color': color } as React.CSSProperties} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <p className="cli-chart-message">loading chart...</p>
+      )}
+    </main>
+  );
+}
+
 function App() {
   const [query, setQuery] = useState('');
   const [repository, setRepository] = useState<Repository | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isMaximized, setIsMaximized] = useState(false);
   const isLicensePage = window.location.pathname === '/license';
+  const cliParameters = new URLSearchParams(window.location.search);
+  const cliChartRepository = cliParameters.get('cliChart');
+  const cliCommand = cliParameters.get('cliCommand') ?? '';
+
+  useEffect(() => window.gitChartWindow?.onMaximizeState(setIsMaximized), []);
 
   async function analyze(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,14 +144,41 @@ function App() {
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="/" aria-label="gitcharts home">
-          <span className="brand-mark"><ChartNoAxesColumnIncreasing size={18} strokeWidth={2.4} /></span>
-          <span>git<span>charts</span></span>
-        </a>
-      </header>
+      {window.gitChartWindow && (
+        <div className="desktop-titlebar" role="toolbar" aria-label="window controls">
+          <div className="desktop-tab">
+            <span className="desktop-tab-name"><span>git</span>chart</span>
+          </div>
+          <div className="titlebar-drag-space" />
+          <div className="window-controls">
+            <button type="button" aria-label="minimize window" title="minimize" onClick={() => window.gitChartWindow?.minimize()}><Minus size={15} /></button>
+            <button type="button" aria-label={isMaximized ? 'restore window' : 'maximize window'} title={isMaximized ? 'restore' : 'maximize'} onClick={() => window.gitChartWindow?.toggleMaximize()}>
+              {isMaximized ? <Copy size={13} /> : <Square size={13} />}
+            </button>
+            <button className="close-window" type="button" aria-label="close window" title="close" onClick={() => window.gitChartWindow?.close()}><X size={16} /></button>
+          </div>
+        </div>
+      )}
+        {cliChartRepository ? (
+          <CliChartView repositoryName={cliChartRepository} command={cliCommand} />
+        ) : (
+          <>
+            <header className="topbar">
+              <a className="brand" href="/" aria-label="gitcharts home">
+                <span className="brand-mark"><ChartNoAxesColumnIncreasing size={18} strokeWidth={2.4} /></span>
+                <span>git<span>charts</span></span>
+              </a>
+              <details className="main-menu">
+                <summary aria-label="open main menu" title="main menu"><MenuIcon size={18} /><span>menu</span></summary>
+                <nav className="main-menu-panel" aria-label="main menu">
+                  <a href="/">explore repositories</a>
+                  <a href="/license">license &amp; credits</a>
+                  <a href="https://github.com/Cranbero" target="_blank" rel="noreferrer">cranbero on github <ArrowUpRight size={14} /></a>
+                </nav>
+              </details>
+            </header>
 
-      <main className="workspace">
+            <main className="workspace">
         {isLicensePage ? (
           <section className="license-page">
             <a className="back-link" href="/">← back to charts</a>
@@ -243,7 +348,9 @@ Any individual developer/team/company using this license, if anything goes wrong
           <a href="https://github.com/Cranbero" target="_blank" rel="noreferrer">see more by cranbero <ArrowUpRight size={13} /></a>
           <a href="https://github.com/Cranbero/cranbero" target="_blank" rel="noreferrer">cranbero/cranbero on github <ArrowUpRight size={13} /></a>
         </footer>
-      </main>
+          </main>
+        </>
+      )}
     </div>
   );
 }
