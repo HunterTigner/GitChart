@@ -1,0 +1,11 @@
+[build]
+  command = "npx vite build"
+  publish = "dist"
+
+[build.environment]
+  ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
